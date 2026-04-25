@@ -39,10 +39,13 @@ int main(void)
 
 	const double threshold = 4.0;
 
-	vector<size_t> HiddenLayers;
-	HiddenLayers.push_back(8 * num_components);
-	HiddenLayers.push_back(16 * num_components);
-	HiddenLayers.push_back(32 * num_components);
+
+	// Train network
+	//
+	//vector<size_t> HiddenLayers;
+	//HiddenLayers.push_back(8 * num_components);
+	//HiddenLayers.push_back(16 * num_components);
+	//HiddenLayers.push_back(32 * num_components);
 
 	//FFBPNeuralNet NNet(2 * num_components, HiddenLayers, num_components);
 
@@ -83,14 +86,17 @@ int main(void)
 	//cout << "Final error rate: " << error_rate << endl;
 	//cout << endl;
 
-
 	//// save the network to a file
 	//NNet.SaveToFile("network.bin");
 
-	// load a network from a file
+
+
+
+
+
+	// Load a network from a file
 	FFBPNeuralNet NNet2("network.bin");
 
-	// run a fresh inference with the loaded network
 	vector<double> io;
 
 	for (size_t i = 0; i < 2 * num_components; i++)
