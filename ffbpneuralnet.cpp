@@ -72,8 +72,8 @@ FFBPNeuralNet::FFBPNeuralNet(const size_t& src_num_input_neurons, const vector<s
 	for (size_t i = 0; i < src_num_output_neurons; i++)
 		OutputLayer.push_back(WeightedNeuron(HiddenLayers[HiddenLayers.size() - 1].size()));
 
-	learning_rate = 1.0;    // 0.25 might be a good value
-	momentum = 1.0; // 0.5 might be a good value
+	learning_rate = 1.0;
+	momentum = 1.0;
 }
 
 FFBPNeuralNet::FFBPNeuralNet(const char* const src_filename)

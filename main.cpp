@@ -42,52 +42,46 @@ int main(void)
 
 	// Train network
 	//
-	//vector<size_t> HiddenLayers;
-	//HiddenLayers.push_back(8 * num_components);
-	//HiddenLayers.push_back(16 * num_components);
-	//HiddenLayers.push_back(32 * num_components);
+	vector<size_t> HiddenLayers;
+	HiddenLayers.push_back(8 * num_components);
+	HiddenLayers.push_back(16 * num_components);
+	HiddenLayers.push_back(32 * num_components);
 
-	//FFBPNeuralNet NNet(2 * num_components, HiddenLayers, num_components);
+	FFBPNeuralNet NNet(2 * num_components, HiddenLayers, num_components);
 
-	//NNet.SetLearningRate(0.0001);
-	//NNet.SetMomentum(1.0);
+	NNet.SetLearningRate(0.0001);
+	NNet.SetMomentum(1.0);
 
-	//const double max_error_rate = 0.01;
-	//const long unsigned int max_training_sessions = 1000000;
+	const double max_error_rate = 0.01;
+	const long unsigned int max_training_sessions = 1000000;
 
-	//double error_rate = 0.0;
-	//long unsigned int num_training_sessions = 0;
+	double error_rate = 0.0;
+	long unsigned int num_training_sessions = 0;
 
-	
-	//// train network until the error rate goes below the maximum error rate
-	//// or we reach the maximum number of training sessions
-	//do
-	//{
-	//	if (num_training_sessions % 1000 == 0)
-	//		cout << num_training_sessions / static_cast<float>(max_training_sessions) << endl;
+	do
+	{
+		if (num_training_sessions % 1000 == 0)
+			cout << num_training_sessions / static_cast<float>(max_training_sessions) << endl;
 
+		vector<double> io;
 
-	//	vector<double> io;
+		for (size_t i = 0; i < 2 * num_components; i++)
+			io.push_back(threshold * dis_real(generator_real));
 
-	//	for (size_t i = 0; i < 2 * num_components; i++)
-	//		io.push_back(threshold * dis_real(generator_real));
+		NNet.FeedForward(io);
+		io = qmul(io);
+		error_rate = NNet.BackPropagate(io);
+		error_rate = sqrt(error_rate);
 
-	//	NNet.FeedForward(io);
-	//	io = qmul(io);
-	//	error_rate = NNet.BackPropagate(io);
-	//	error_rate = sqrt(error_rate);
+		num_training_sessions++;
 
-	//	num_training_sessions++;
+	} while (error_rate >= max_error_rate && num_training_sessions < max_training_sessions);
 
-	//} while (error_rate >= max_error_rate && num_training_sessions < max_training_sessions);
+	cout << "Final number of training sessions/epochs: " << num_training_sessions << endl;
+	cout << "Final error rate: " << error_rate << endl;
+	cout << endl;
 
-
-	//cout << "Final number of training sessions/epochs: " << num_training_sessions << endl;
-	//cout << "Final error rate: " << error_rate << endl;
-	//cout << endl;
-
-	//// save the network to a file
-	//NNet.SaveToFile("network.bin");
+	NNet.SaveToFile("network.bin");
 
 
 
@@ -95,6 +89,7 @@ int main(void)
 
 
 	// Load a network from a file
+	//
 	FFBPNeuralNet NNet2("network.bin");
 
 	vector<double> io;
