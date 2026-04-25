@@ -21,36 +21,27 @@ public:
 	double GetPreviousWeightAdjustment(const size_t& index) const;
 	void SetBiasWeight(const double& src_bias_weight);
 	double GetBiasWeight(void) const;
+	// FIX: added previous bias weight adjustment getter/setter for momentum on bias updates
+	void SetPreviousBiasWeightAdjustment(const double& src_adjustment);
+	double GetPreviousBiasWeightAdjustment(void) const;
 	double GetValue(void) const;
 	void SetBias(const double& src_bias);
 	double GetBias(void) const;
 	void RandomizeWeights(void);
 	void PerturbWeights(const double scale);
 
-	// logistic function
+	// tanh activation function
 	static inline double ActivationFunction(const double& x)
-
 	{
-
 		return tanh(x);
-
 	}
 
-
-
-	// the input for this function is not x, but f(x)
-
-	// tanh'(x) = 1 - tanh(x)^2 = 1 - f(x)^2
-
+	// derivative of tanh: tanh'(x) = 1 - tanh(x)^2 = 1 - f(x)^2
+	// note: input is f(x), not x
 	static inline double DerivativeOfActivationFunction(const double& f_x)
-
 	{
-
 		return 1.0 - f_x * f_x;
-
 	}
-
-
 
 	inline double GetRandWeight(void) const
 	{
@@ -60,6 +51,7 @@ public:
 
 protected:
 	double bias_weight, bias;
+	double previous_bias_weight_adjustment;  // FIX: tracks previous bias adjustment for momentum
 	vector<double> weights;
 	vector<double> previous_weight_adjustments;
 	double value;

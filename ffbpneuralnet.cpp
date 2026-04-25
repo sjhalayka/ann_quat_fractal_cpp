@@ -19,6 +19,8 @@ using std::runtime_error;
 using std::cout;
 using std::endl;
 
+#include <iomanip>
+
 #include <cstdlib>
 #include <ctime>
 #include <cmath>
@@ -79,10 +81,6 @@ FFBPNeuralNet::FFBPNeuralNet(const char* const src_filename)
 	LoadFromFile(src_filename);
 }
 
-#include <iostream>
-#include <iomanip>
-using namespace std;
-
 void FFBPNeuralNet::FeedForward(const vector<double>& src_inputs)
 {
 	// sanity check
@@ -104,7 +102,7 @@ void FFBPNeuralNet::FeedForward(const vector<double>& src_inputs)
 		for (size_t j = 0; j < HiddenLayers[i - 1].size(); j++)
 			PreviousLayerValues.push_back(HiddenLayers[i - 1][j].GetValue());
 
-		// feed to previous hidden layer's values to this hidden layer's neurons
+		// feed previous hidden layer's values to this hidden layer's neurons
 		for (size_t j = 0; j < HiddenLayers[i].size(); j++)
 			HiddenLayers[i][j].SetInputValues(PreviousLayerValues);
 	}
@@ -116,7 +114,6 @@ void FFBPNeuralNet::FeedForward(const vector<double>& src_inputs)
 	for (size_t i = 0; i < HiddenLayers[HiddenLayers.size() - 1].size(); i++)
 		PreviousLayerValues.push_back(HiddenLayers[HiddenLayers.size() - 1][i].GetValue());
 
-	// feed to previous hidden layer's values to output layer's neurons
 	// apply_activation=false gives linear (identity) output for regression
 	for (size_t i = 0; i < OutputLayer.size(); i++)
 		OutputLayer[i].SetInputValues(PreviousLayerValues, false);
@@ -133,7 +130,9 @@ void FFBPNeuralNet::GetOutputValues(vector<double>& src_outputs)
 
 size_t FFBPNeuralNet::GetMaximumOutputNeuron(void) const
 {
-	double temp_val = DBL_MIN;
+	// FIX: was DBL_MIN (smallest positive double), must be -DBL_MAX so any
+	// negative output value correctly replaces the initial sentinel.
+	double temp_val = -DBL_MAX;
 	size_t final_index = 0;
 
 	for (size_t i = 0; i < OutputLayer.size(); i++)
@@ -150,39 +149,32 @@ size_t FFBPNeuralNet::GetMaximumOutputNeuron(void) const
 
 double FFBPNeuralNet::BackPropagate(const vector<double>& src_desired_outputs)
 {
-	// generate output layer errors
+	// generate output layer deltas
+	// output neurons are linear (no activation), so derivative is 1 — delta = error directly
 	vector<double> OutputLayerErrors(OutputLayer.size());
 
 	for (size_t i = 0; i < OutputLayer.size(); i++)
-	{
-		// For linear output neurons, the derivative of the activation function is 1.0
-		// (identity function has slope 1 everywhere)
-		OutputLayerErrors[i] = 1.0 * (src_desired_outputs[i] - OutputLayer[i].GetValue());
-	}
+		OutputLayerErrors[i] = src_desired_outputs[i] - OutputLayer[i].GetValue();
 
 
-	// calculate error rate, mean squared error
+	// calculate mean squared error
 	double error_rate = 0.0;
 
 	for (size_t i = 0; i < OutputLayer.size(); i++)
 		error_rate += (OutputLayer[i].GetValue() - src_desired_outputs[i]) * (OutputLayer[i].GetValue() - src_desired_outputs[i]);
 
-	error_rate /= static_cast<double>(OutputLayer.size()); // create mean
+	error_rate /= static_cast<double>(OutputLayer.size());
 
 
-	// To generate error:
-	// for each node in current layer
-	// sum += each node in next layer's error * connection weight between current node & next layer's current node
-	// error = sum * derivative
-
-	// generate hidden layer errors
+	// generate hidden layer errors (backpropagation)
+	// for each node: error = (sum of next-layer errors * connecting weights) * activation derivative
 	vector< vector<double> > HiddenLayerErrors;
 	HiddenLayerErrors.resize(HiddenLayers.size());
 
 	for (size_t i = 0; i < HiddenLayerErrors.size(); i++)
 		HiddenLayerErrors[i].resize(HiddenLayers[i].size());
 
-	// generate last hidden layer's errors
+	// generate last hidden layer's errors from output layer
 	for (size_t i = 0; i < HiddenLayers[HiddenLayers.size() - 1].size(); i++)
 	{
 		double sum = 0.0;
@@ -193,103 +185,106 @@ double FFBPNeuralNet::BackPropagate(const vector<double>& src_desired_outputs)
 		HiddenLayerErrors[HiddenLayers.size() - 1][i] = sum * WeightedNeuron::DerivativeOfActivationFunction(HiddenLayers[HiddenLayers.size() - 1][i].GetValue());
 	}
 
-	// by continuing to work backwards...
-	// for each additional hidden layer (ErrorLayerIndex),
-	// generate errors by comparing against next hidden layer's errors (NextLayerIndex)
+	// work backwards through remaining hidden layers
 	for (size_t i = 1; i < HiddenLayers.size(); i++)
 	{
-		// to help ease the pain :)
 		size_t ErrorLayerIndex = HiddenLayers.size() - i - 1;
 		size_t NextLayerIndex = HiddenLayers.size() - i;
 
-		for (size_t i = 0; i < HiddenLayers[ErrorLayerIndex].size(); i++)
+		for (size_t k = 0; k < HiddenLayers[ErrorLayerIndex].size(); k++)
 		{
 			double sum = 0.0;
 
 			for (size_t j = 0; j < HiddenLayers[NextLayerIndex].size(); j++)
-				sum += HiddenLayerErrors[NextLayerIndex][j] * HiddenLayers[NextLayerIndex][j].GetWeight(i);
+				sum += HiddenLayerErrors[NextLayerIndex][j] * HiddenLayers[NextLayerIndex][j].GetWeight(k);
 
-			HiddenLayerErrors[ErrorLayerIndex][i] = sum * WeightedNeuron::DerivativeOfActivationFunction(HiddenLayers[ErrorLayerIndex][i].GetValue());
+			HiddenLayerErrors[ErrorLayerIndex][k] = sum * WeightedNeuron::DerivativeOfActivationFunction(HiddenLayers[ErrorLayerIndex][k].GetValue());
 		}
 	}
 
 
+	// ---- adjust weights ----
 
-	// adjust weights
-
-	// adjust the output layer node's weights
+	// adjust output layer weights (inputs come from last hidden layer)
 	for (size_t i = 0; i < HiddenLayers[HiddenLayers.size() - 1].size(); i++)
 	{
-		double delta_weight = 0.0;
 		double neuron_value = HiddenLayers[HiddenLayers.size() - 1][i].GetValue();
 
 		for (size_t j = 0; j < OutputLayer.size(); j++)
 		{
-			delta_weight = learning_rate * OutputLayerErrors[j] * neuron_value;
+			double delta_weight = learning_rate * OutputLayerErrors[j] * neuron_value;
 			OutputLayer[j].SetWeight(i, OutputLayer[j].GetWeight(i) + delta_weight + momentum * OutputLayer[j].GetPreviousWeightAdjustment(i));
 			OutputLayer[j].SetPreviousWeightAdjustment(i, delta_weight);
 		}
 	}
 
-	// adjust output layer biases
+	// adjust output layer biases (with momentum)
+	// FIX: was missing momentum term; now tracks and applies previous bias adjustment
 	for (size_t j = 0; j < OutputLayer.size(); j++)
 	{
-		double bias_weight = OutputLayer[j].GetBiasWeight();
-		bias_weight += learning_rate * OutputLayerErrors[j] * OutputLayer[j].GetBias();
-		OutputLayer[j].SetBiasWeight(bias_weight);
+		double delta_bias = learning_rate * OutputLayerErrors[j] * OutputLayer[j].GetBias();
+		double new_bias_weight = OutputLayer[j].GetBiasWeight()
+			+ delta_bias
+			+ momentum * OutputLayer[j].GetPreviousBiasWeightAdjustment();
+		OutputLayer[j].SetBiasWeight(new_bias_weight);
+		OutputLayer[j].SetPreviousBiasWeightAdjustment(delta_bias);
 	}
 
-	// adjust hidden layers, except for the first one
+	// adjust hidden layers (all except the first), working backwards
 	for (size_t i = 1; i < HiddenLayers.size(); i++)
 	{
-		// to help ease the pain :)
 		size_t AdjustmentLayerIndex = HiddenLayers.size() - i;
 		size_t PreviousLayerIndex = HiddenLayers.size() - i - 1;
 
-		for (size_t i = 0; i < HiddenLayers[PreviousLayerIndex].size(); i++)
+		for (size_t k = 0; k < HiddenLayers[PreviousLayerIndex].size(); k++)
 		{
-			double delta_weight = 0.0;
-			double neuron_value = HiddenLayers[PreviousLayerIndex][i].GetValue();
+			double neuron_value = HiddenLayers[PreviousLayerIndex][k].GetValue();
 
 			for (size_t j = 0; j < HiddenLayers[AdjustmentLayerIndex].size(); j++)
 			{
-				delta_weight = learning_rate * HiddenLayerErrors[AdjustmentLayerIndex][j] * neuron_value;
-				HiddenLayers[AdjustmentLayerIndex][j].SetWeight(i, HiddenLayers[AdjustmentLayerIndex][j].GetWeight(i) + delta_weight + momentum * HiddenLayers[AdjustmentLayerIndex][j].GetPreviousWeightAdjustment(i));
-				HiddenLayers[AdjustmentLayerIndex][j].SetPreviousWeightAdjustment(i, delta_weight);
+				double delta_weight = learning_rate * HiddenLayerErrors[AdjustmentLayerIndex][j] * neuron_value;
+				HiddenLayers[AdjustmentLayerIndex][j].SetWeight(k, HiddenLayers[AdjustmentLayerIndex][j].GetWeight(k) + delta_weight + momentum * HiddenLayers[AdjustmentLayerIndex][j].GetPreviousWeightAdjustment(k));
+				HiddenLayers[AdjustmentLayerIndex][j].SetPreviousWeightAdjustment(k, delta_weight);
 			}
 		}
 
-		// adjust hidden layer biases
+		// adjust biases for this hidden layer (with momentum)
+		// FIX: was missing momentum term
 		for (size_t j = 0; j < HiddenLayers[AdjustmentLayerIndex].size(); j++)
 		{
-			double bias_weight = HiddenLayers[AdjustmentLayerIndex][j].GetBiasWeight();
-			bias_weight += learning_rate * HiddenLayerErrors[AdjustmentLayerIndex][j] * HiddenLayers[AdjustmentLayerIndex][j].GetBias();
-			HiddenLayers[AdjustmentLayerIndex][j].SetBiasWeight(bias_weight);
+			double delta_bias = learning_rate * HiddenLayerErrors[AdjustmentLayerIndex][j] * HiddenLayers[AdjustmentLayerIndex][j].GetBias();
+			double new_bias_weight = HiddenLayers[AdjustmentLayerIndex][j].GetBiasWeight()
+				+ delta_bias
+				+ momentum * HiddenLayers[AdjustmentLayerIndex][j].GetPreviousBiasWeightAdjustment();
+			HiddenLayers[AdjustmentLayerIndex][j].SetBiasWeight(new_bias_weight);
+			HiddenLayers[AdjustmentLayerIndex][j].SetPreviousBiasWeightAdjustment(delta_bias);
 		}
 	}
 
 
-
-	// adjust first hidden layer weights
+	// adjust first hidden layer weights (inputs come from input layer)
 	for (size_t i = 0; i < InputLayer.size(); i++)
 	{
-		double delta_weight = 0.0;
 		double neuron_value = InputLayer[i];
 
 		for (size_t j = 0; j < HiddenLayers[0].size(); j++)
 		{
-			delta_weight = learning_rate * HiddenLayerErrors[0][j] * neuron_value;
+			double delta_weight = learning_rate * HiddenLayerErrors[0][j] * neuron_value;
 			HiddenLayers[0][j].SetWeight(i, HiddenLayers[0][j].GetWeight(i) + delta_weight + momentum * HiddenLayers[0][j].GetPreviousWeightAdjustment(i));
 			HiddenLayers[0][j].SetPreviousWeightAdjustment(i, delta_weight);
 		}
 	}
 
-	// adjust first hidden layer biases
+	// adjust first hidden layer biases (with momentum)
+	// FIX: was missing momentum term
 	for (size_t j = 0; j < HiddenLayers[0].size(); j++)
 	{
-		double bias_weight = HiddenLayers[0][j].GetBiasWeight();
-		bias_weight += learning_rate * HiddenLayerErrors[0][j] * HiddenLayers[0][j].GetBias();
-		HiddenLayers[0][j].SetBiasWeight(bias_weight);
+		double delta_bias = learning_rate * HiddenLayerErrors[0][j] * HiddenLayers[0][j].GetBias();
+		double new_bias_weight = HiddenLayers[0][j].GetBiasWeight()
+			+ delta_bias
+			+ momentum * HiddenLayers[0][j].GetPreviousBiasWeightAdjustment();
+		HiddenLayers[0][j].SetBiasWeight(new_bias_weight);
+		HiddenLayers[0][j].SetPreviousBiasWeightAdjustment(delta_bias);
 	}
 
 	return error_rate;
@@ -565,6 +560,12 @@ void FFBPNeuralNet::SaveToFile(const char* const filename) const
 			out.write((const char*)&temp_double, sizeof(double));
 			if (out.fail())
 				throw runtime_error("Error writing to file.");
+
+			// write previous bias weight adjustment
+			temp_double = HiddenLayers[i][j].GetPreviousBiasWeightAdjustment();
+			out.write((const char*)&temp_double, sizeof(double));
+			if (out.fail())
+				throw runtime_error("Error writing to file.");
 		}
 	}
 
@@ -573,7 +574,6 @@ void FFBPNeuralNet::SaveToFile(const char* const filename) const
 	{
 		// write num input weights
 		temp_size_t = OutputLayer[i].GetNumInputs();
-
 		out.write((const char*)&temp_size_t, sizeof(size_t));
 		if (out.fail())
 			throw runtime_error("Error writing to file.");
@@ -605,10 +605,15 @@ void FFBPNeuralNet::SaveToFile(const char* const filename) const
 		out.write((const char*)&temp_double, sizeof(double));
 		if (out.fail())
 			throw runtime_error("Error writing to file.");
+
+		// write previous bias weight adjustment
+		temp_double = OutputLayer[i].GetPreviousBiasWeightAdjustment();
+		out.write((const char*)&temp_double, sizeof(double));
+		if (out.fail())
+			throw runtime_error("Error writing to file.");
 	}
 }
 
-//have to set number of input neurons
 void FFBPNeuralNet::LoadFromFile(const char* const filename)
 {
 	ifstream in(filename, ios::binary);
@@ -693,7 +698,6 @@ void FFBPNeuralNet::LoadFromFile(const char* const filename)
 					throw runtime_error("Error reading from file.");
 
 				HiddenLayers[i][j].SetPreviousWeightAdjustment(k, temp_double);
-
 			}
 
 			// read bias
@@ -709,6 +713,13 @@ void FFBPNeuralNet::LoadFromFile(const char* const filename)
 				throw runtime_error("Error reading from file.");
 
 			HiddenLayers[i][j].SetBiasWeight(temp_double);
+
+			// read previous bias weight adjustment
+			in.read((char*)&temp_double, sizeof(double));
+			if (in.fail() || in.eof())
+				throw runtime_error("Error reading from file.");
+
+			HiddenLayers[i][j].SetPreviousBiasWeightAdjustment(temp_double);
 		}
 	}
 
@@ -732,7 +743,7 @@ void FFBPNeuralNet::LoadFromFile(const char* const filename)
 
 			OutputLayer[i].SetWeight(j, temp_double);
 
-			// read previous weight adjustmentd
+			// read previous weight adjustment
 			in.read((char*)&temp_double, sizeof(double));
 			if (in.fail() || in.eof())
 				throw runtime_error("Error reading from file.");
@@ -749,9 +760,16 @@ void FFBPNeuralNet::LoadFromFile(const char* const filename)
 
 		// read bias weight
 		in.read((char*)&temp_double, sizeof(double));
-		if (in.fail())
+		if (in.fail() || in.eof())
 			throw runtime_error("Error reading from file.");
 
 		OutputLayer[i].SetBiasWeight(temp_double);
+
+		// read previous bias weight adjustment
+		in.read((char*)&temp_double, sizeof(double));
+		if (in.fail())
+			throw runtime_error("Error reading from file.");
+
+		OutputLayer[i].SetPreviousBiasWeightAdjustment(temp_double);
 	}
 }

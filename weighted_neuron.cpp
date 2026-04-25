@@ -17,6 +17,7 @@ WeightedNeuron::WeightedNeuron(const size_t& src_num_inputs)
 
 	bias = 1.0;
 	value = 0.0;
+	previous_bias_weight_adjustment = 0.0;  // FIX: initialise to zero
 }
 
 size_t WeightedNeuron::GetNumInputs(void) const
@@ -94,6 +95,17 @@ double WeightedNeuron::GetPreviousWeightAdjustment(const size_t& index) const
 		throw out_of_range("Invalid previous weight adjustment index.");
 
 	return previous_weight_adjustments[index];
+}
+
+// FIX: getter and setter for previous bias weight adjustment (used for momentum)
+void WeightedNeuron::SetPreviousBiasWeightAdjustment(const double& src_adjustment)
+{
+	previous_bias_weight_adjustment = src_adjustment;
+}
+
+double WeightedNeuron::GetPreviousBiasWeightAdjustment(void) const
+{
+	return previous_bias_weight_adjustment;
 }
 
 void WeightedNeuron::SetBiasWeight(const double& src_bias_weight)
