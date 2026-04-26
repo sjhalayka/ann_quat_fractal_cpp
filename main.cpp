@@ -155,13 +155,14 @@ bool write_triangles_to_binary_stereo_lithography_file(const vector<triangle>& t
 
 int main(void)
 {
-	std::mt19937 generator_real(static_cast<unsigned>(time(0)));
-	std::uniform_real_distribution<float> dis_real(-1.0f, 1.0f);
-
 	const double threshold = 4.0;
 
+	std::mt19937 generator_real(static_cast<unsigned>(time(0)));
+	std::uniform_real_distribution<float> dis_real(-threshold, threshold);
 
-	// Train network
+
+	// 1) Train network. This section can be commented out after the network
+	// has been trained.
 	//
 	vector<size_t> HiddenLayers;
 	HiddenLayers.push_back(8 * num_components);
@@ -171,7 +172,7 @@ int main(void)
 	FFBPNeuralNet NNet(2 * num_components, HiddenLayers, num_components);
 
 	NNet.SetLearningRate(0.0001);
-	NNet.SetMomentum(0.25);
+	NNet.SetMomentum(0.1);
 
 	const double max_error_rate = 0.01;
 	const long unsigned int max_training_sessions = 10000000;
@@ -187,7 +188,7 @@ int main(void)
 		vector<double> io;
 
 		for (size_t i = 0; i < 2 * num_components; i++)
-			io.push_back(threshold * dis_real(generator_real));
+			io.push_back(dis_real(generator_real));
 
 		NNet.FeedForward(io);
 		io = qmul(io);
@@ -209,10 +210,13 @@ int main(void)
 
 
 
-	// Load a network from a file
+	// 2) Load a network from a file
 	//
 	FFBPNeuralNet NNet2("network.bin");
 
+
+	// 3) Generate isosurface
+	//
 	const float grid_max = 1.5;
 	const float grid_min = -grid_max;
 	const size_t res = 100;
