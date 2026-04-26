@@ -10,7 +10,6 @@ const unsigned int num_components = 4;
 
 vector<double> qmul(const vector<double>& qaqb)
 {
-	// in case qA and qOut point to the same variable...
 	double temp_a_x = qaqb[0];
 	double temp_a_y = qaqb[1];
 	double temp_a_z = qaqb[2];
@@ -31,6 +30,16 @@ vector<double> qmul(const vector<double>& qaqb)
 	return out;
 }
 
+vector<double> qmul_ann(const vector<double>& qaqb, FFBPNeuralNet NNet2)
+{
+	NNet2.FeedForward(qaqb);
+
+	vector<double> predicted;
+	NNet2.GetOutputValues(predicted);
+
+	return predicted;
+}
+
 
 int main(void)
 {
@@ -42,46 +51,46 @@ int main(void)
 
 	// Train network
 	//
-	vector<size_t> HiddenLayers;
-	HiddenLayers.push_back(8 * num_components);
-	HiddenLayers.push_back(16 * num_components);
-	HiddenLayers.push_back(32 * num_components);
+	//vector<size_t> HiddenLayers;
+	//HiddenLayers.push_back(8 * num_components);
+	//HiddenLayers.push_back(16 * num_components);
+	//HiddenLayers.push_back(32 * num_components);
 
-	FFBPNeuralNet NNet(2 * num_components, HiddenLayers, num_components);
+	//FFBPNeuralNet NNet(2 * num_components, HiddenLayers, num_components);
 
-	NNet.SetLearningRate(0.0001);
-	NNet.SetMomentum(1.0);
+	//NNet.SetLearningRate(0.0001);
+	//NNet.SetMomentum(1.0);
 
-	const double max_error_rate = 0.01;
-	const long unsigned int max_training_sessions = 1000000;
+	//const double max_error_rate = 0.01;
+	//const long unsigned int max_training_sessions = 1000000;
 
-	double error_rate = 0.0;
-	long unsigned int num_training_sessions = 0;
+	//double error_rate = 0.0;
+	//long unsigned int num_training_sessions = 0;
 
-	do
-	{
-		if (num_training_sessions % 1000 == 0)
-			cout << num_training_sessions / static_cast<float>(max_training_sessions) << endl;
+	//do
+	//{
+	//	if (num_training_sessions % 1000 == 0)
+	//		cout << num_training_sessions / static_cast<float>(max_training_sessions) << endl;
 
-		vector<double> io;
+	//	vector<double> io;
 
-		for (size_t i = 0; i < 2 * num_components; i++)
-			io.push_back(threshold * dis_real(generator_real));
+	//	for (size_t i = 0; i < 2 * num_components; i++)
+	//		io.push_back(threshold * dis_real(generator_real));
 
-		NNet.FeedForward(io);
-		io = qmul(io);
-		error_rate = NNet.BackPropagate(io);
-		error_rate = sqrt(error_rate);
+	//	NNet.FeedForward(io);
+	//	io = qmul(io);
+	//	error_rate = NNet.BackPropagate(io);
+	//	error_rate = sqrt(error_rate);
 
-		num_training_sessions++;
+	//	num_training_sessions++;
 
-	} while (error_rate >= max_error_rate && num_training_sessions < max_training_sessions);
+	//} while (error_rate >= max_error_rate && num_training_sessions < max_training_sessions);
 
-	cout << "Final number of training sessions/epochs: " << num_training_sessions << endl;
-	cout << "Final error rate: " << error_rate << endl;
-	cout << endl;
+	//cout << "Final number of training sessions/epochs: " << num_training_sessions << endl;
+	//cout << "Final error rate: " << error_rate << endl;
+	//cout << endl;
 
-	NNet.SaveToFile("network.bin");
+	//NNet.SaveToFile("network.bin");
 
 
 
@@ -97,11 +106,7 @@ int main(void)
 	for (size_t i = 0; i < 2 * num_components; i++)
 		io.push_back(threshold * dis_real(generator_real));
 
-	NNet2.FeedForward(io);
-
-	vector<double> predicted;
-	NNet2.GetOutputValues(predicted);
-
+	vector<double> predicted = qmul_ann(io, NNet2);
 	vector<double> expected = qmul(io);
 
 	cout << "Predicted: "

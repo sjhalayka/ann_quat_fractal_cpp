@@ -17,7 +17,7 @@ WeightedNeuron::WeightedNeuron(const size_t& src_num_inputs)
 
 	bias = 1.0;
 	value = 0.0;
-	previous_bias_weight_adjustment = 0.0;  // FIX: initialise to zero
+	previous_bias_weight_adjustment = 0.0;
 }
 
 size_t WeightedNeuron::GetNumInputs(void) const
@@ -62,7 +62,6 @@ void WeightedNeuron::SetInputValues(const vector<double>& src_inputs, bool apply
 
 	if (apply_activation)
 		value = WeightedNeuron::ActivationFunction(value);
-	// else: linear output neuron — value is the raw weighted sum
 }
 
 void WeightedNeuron::SetWeight(const size_t& index, const double& src_weight)

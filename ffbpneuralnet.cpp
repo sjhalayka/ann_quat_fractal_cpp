@@ -130,8 +130,6 @@ void FFBPNeuralNet::GetOutputValues(vector<double>& src_outputs)
 
 size_t FFBPNeuralNet::GetMaximumOutputNeuron(void) const
 {
-	// FIX: was DBL_MIN (smallest positive double), must be -DBL_MAX so any
-	// negative output value correctly replaces the initial sentinel.
 	double temp_val = -DBL_MAX;
 	size_t final_index = 0;
 
