@@ -30,7 +30,7 @@ vector<double> qmul(const vector<double>& qaqb)
 	return out;
 }
 
-vector<double> qmul_ann(const vector<double>& qaqb, FFBPNeuralNet NNet2)
+vector<double> qmul_ann(const vector<double>& qaqb, FFBPNeuralNet &NNet2)
 {
 	NNet2.FeedForward(qaqb);
 
