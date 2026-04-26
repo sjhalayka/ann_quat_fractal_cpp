@@ -30,12 +30,12 @@ vector<double> qmul(const vector<double>& qaqb)
 	return out;
 }
 
-vector<double> qmul_ann(const vector<double>& qaqb, FFBPNeuralNet &NNet2)
+vector<double> qmul_ann(const vector<double>& qaqb, FFBPNeuralNet &NNet)
 {
-	NNet2.FeedForward(qaqb);
+	NNet.FeedForward(qaqb);
 
 	vector<double> predicted;
-	NNet2.GetOutputValues(predicted);
+	NNet.GetOutputValues(predicted);
 
 	return predicted;
 }
