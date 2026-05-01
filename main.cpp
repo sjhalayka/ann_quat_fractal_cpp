@@ -157,7 +157,7 @@ void generate_stl_file(const bool use_network, const float threshold_max, const 
 {
 	const float grid_max = 1.5;
 	const float grid_min = -grid_max;
-	const size_t res = 100;
+	const size_t res = 500;
 
 	const bool make_border = true;
 
