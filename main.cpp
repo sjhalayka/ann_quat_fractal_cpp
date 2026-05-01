@@ -42,7 +42,7 @@ vector<double> qmul_ann(const vector<double>& qaqb, FFBPNeuralNet &NNet)
 	return predicted;
 }
 
-double iterate(const quaternion& src_Z, const quaternion &C, const short unsigned int& max_iterations, const float& threshold, FFBPNeuralNet& NNet)
+double iterate(const quaternion& src_Z, const quaternion &C, const short unsigned int& max_iterations, const float& threshold, FFBPNeuralNet& NNet, const bool use_network)
 {
 	quaternion Z = src_Z;
 
@@ -63,8 +63,10 @@ double iterate(const quaternion& src_Z, const quaternion &C, const short unsigne
 
 		vector<double> Z_out;
 
-		Z_out = qmul_ann(ZZ_flat, NNet);
-		//Z_out = qmul(ZZ_flat);
+		if(use_network)
+			Z_out = qmul_ann(ZZ_flat, NNet);
+		else
+			Z_out = qmul(ZZ_flat);
 
 		Z.x = Z_out[0] + C.x;
 		Z.y = Z_out[1] + C.y;
@@ -151,11 +153,121 @@ bool write_triangles_to_binary_stereo_lithography_file(const vector<triangle>& t
 	return true;
 }
 
+void generate_stl_file(const bool use_network, const float threshold_max, const float threshold_min, const float threshold, const char* const file_name, FFBPNeuralNet &NNet)
+{
+	const float grid_max = 1.5;
+	const float grid_min = -grid_max;
+	const size_t res = 100;
 
+	const bool make_border = true;
+
+	const float z_w = 0;
+	quaternion C;
+	C.x = 0.3f;
+	C.y = 0.5f;
+	C.z = 0.4f;
+	C.w = 0.2f;
+	const unsigned short int max_iterations = 8;
+
+	// When adding a border, use a value that is greater than the threshold.
+	const float border_value = 1.0f + threshold;
+	const double mid_threshold = (threshold_max + threshold_min) * 0.5;
+
+	vector<triangle> triangles;
+	vector<float> xyplane0(res * res, 0);
+	vector<float> xyplane1(res * res, 0);
+
+	const float step_size = (grid_max - grid_min) / (res - 1);
+
+	size_t z = 0;
+
+	quaternion Z(grid_min, grid_min, grid_min, z_w);
+
+	// Calculate xy plane 0.
+	for (size_t x = 0; x < res; x++, Z.x += step_size)
+	{
+		Z.y = grid_min;
+
+		for (size_t y = 0; y < res; y++, Z.y += step_size)
+		{
+			if (true == make_border && (x == 0 || y == 0 || z == 0 || x == res - 1 || y == res - 1 || z == res - 1))
+				xyplane0[x * res + y] = border_value;
+			else
+			{
+				if (z < res / 2)
+				{
+					xyplane0[x * res + y] = static_cast<float>(iterate(Z, C, max_iterations, threshold, NNet, use_network));
+					xyplane0[x * res + y] = fabsf(xyplane0[x * res + y] - mid_threshold);
+				}
+				else
+					xyplane0[x * res + y] = border_value;
+			}
+		}
+	}
+
+	// Prepare for xy plane 1.
+	z++;
+	Z.z += step_size;
+
+	size_t box_count = 0;
+
+	// Calculate xy planes 1 and greater.
+	for (; z < res; z++, Z.z += step_size)
+	{
+		Z.x = grid_min;
+
+		cout << "Calculating triangles from xy-plane pair " << z << " of " << res - 1 << endl;
+
+		for (size_t x = 0; x < res; x++, Z.x += step_size)
+		{
+			Z.y = grid_min;
+
+			for (size_t y = 0; y < res; y++, Z.y += step_size)
+			{
+				if (true == make_border && (x == 0 || y == 0 || z == 0 || x == res - 1 || y == res - 1 || z == res - 1))
+					xyplane1[x * res + y] = border_value;
+				else
+				{
+					if (z < res / 2)
+					{
+						xyplane1[x * res + y] = static_cast<float>(iterate(Z, C, max_iterations, threshold, NNet, use_network));
+						xyplane1[x * res + y] = fabsf(xyplane1[x * res + y] - mid_threshold);
+					}
+					else
+						xyplane1[x * res + y] = border_value;
+				}
+			}
+		}
+
+		// Calculate triangles for the xy-planes corresponding to z - 1 and z by marching cubes.
+		tesselate_adjacent_xy_plane_pair(
+			box_count,
+			xyplane0, xyplane1,
+			z - 1,
+			triangles,
+			threshold_max - mid_threshold, // Use threshold as isovalue.
+			grid_min, grid_max, res,
+			grid_min, grid_max, res,
+			grid_min, grid_max, res);
+
+		// Swap memory pointers (fast) instead of performing a memory copy (slow).
+		xyplane1.swap(xyplane0);
+	}
+
+	cout << endl;
+
+	if (0 < triangles.size())
+		write_triangles_to_binary_stereo_lithography_file(triangles, file_name);
+
+	// Print box-counting dimension
+	// Make sure that step_size != 1.0f :)
+	cout << "Box counting dimension: " << logf(static_cast<float>(box_count)) / logf(1.0f / step_size) << endl;
+
+}
 
 int main(void)
 {
-	const double threshold = 4.0;
+	const float threshold = 4.0;
 
 	std::mt19937 generator_real(static_cast<unsigned>(time(0)));
 	std::uniform_real_distribution<float> dis_real(-threshold, threshold);
@@ -217,98 +329,15 @@ int main(void)
 
 	// 3) Generate isosurface
 	//
-	const float grid_max = 1.5;
-	const float grid_min = -grid_max;
-	const size_t res = 100;
+	float threshold_max = threshold;
+	float threshold_min = 0;
 
-	const bool make_border = true;
-
-	const float z_w = 0;
-	quaternion C;
-	C.x = 0.3f;
-	C.y = 0.5f;
-	C.z = 0.4f;
-	C.w = 0.2f;
-	const unsigned short int max_iterations = 8;
-
-	// When adding a border, use a value that is greater than the threshold.
-	const float border_value = 1.0f + threshold;
-
-	vector<triangle> triangles;
-	vector<float> xyplane0(res * res, 0);
-	vector<float> xyplane1(res * res, 0);
-
-	const float step_size = (grid_max - grid_min) / (res - 1);
-
-	size_t z = 0;
-
-	quaternion Z(grid_min, grid_min, grid_min, z_w);
-
-	// Calculate xy plane 0.
-	for (size_t x = 0; x < res; x++, Z.x += step_size)
-	{
-		Z.y = grid_min;
-
-		for (size_t y = 0; y < res; y++, Z.y += step_size)
-		{
-			if (true == make_border && (x == 0 || y == 0 || z == 0 || x == res - 1 || y == res - 1 || z == res - 1))
-				xyplane0[x * res + y] = border_value;
-			else
-				xyplane0[x * res + y] = static_cast<float>(iterate(Z, C, max_iterations, threshold, NNet2));
-		}
-	}
-
-	// Prepare for xy plane 1.
-	z++;
-	Z.z += step_size;
-
-	size_t box_count = 0;
-
-	// Calculate xy planes 1 and greater.
-	for (; z < res; z++, Z.z += step_size)
-	{
-		Z.x = grid_min;
-
-		cout << "Calculating triangles from xy-plane pair " << z << " of " << res - 1 << endl;
-
-		for (size_t x = 0; x < res; x++, Z.x += step_size)
-		{
-			Z.y = grid_min;
-
-			for (size_t y = 0; y < res; y++, Z.y += step_size)
-			{
-				if (true == make_border && (x == 0 || y == 0 || z == 0 || x == res - 1 || y == res - 1 || z == res - 1))
-					xyplane1[x * res + y] = border_value;
-				else
-					xyplane1[x * res + y] = static_cast<float>(iterate(Z, C, max_iterations, threshold, NNet2));
-			}
-		}
-
-		// Calculate triangles for the xy-planes corresponding to z - 1 and z by marching cubes.
-		tesselate_adjacent_xy_plane_pair(
-			box_count,
-			xyplane0, xyplane1,
-			z - 1,
-			triangles,
-			threshold, // Use threshold as isovalue.
-			grid_min, grid_max, res,
-			grid_min, grid_max, res,
-			grid_min, grid_max, res);
-
-		// Swap memory pointers (fast) instead of performing a memory copy (slow).
-		xyplane1.swap(xyplane0);
-	}
-
-	cout << endl;
-
-	if (0 < triangles.size())
-		write_triangles_to_binary_stereo_lithography_file(triangles, "out.stl");
-
-	// Print box-counting dimension
-	// Make sure that step_size != 1.0f :)
-	cout << "Box counting dimension: " << logf(static_cast<float>(box_count)) / logf(1.0f / step_size) << endl;
-
-
+	generate_stl_file(false, threshold * 0.25 - 0.1, 0, threshold, "out0.stl", NNet2);
+	generate_stl_file(false, threshold * 0.5 - 0.1, threshold * 0.25, threshold, "out1.stl", NNet2);
+	generate_stl_file(false, threshold, threshold * 0.5, threshold, "out2.stl", NNet2);
+	generate_stl_file(true, threshold * 0.25 - 0.1, 0, threshold, "out0_network.stl", NNet2);
+	generate_stl_file(true, threshold * 0.5 - 0.1, threshold * 0.25, threshold, "out1_network.stl", NNet2);
+	generate_stl_file(true, threshold, threshold * 0.5, threshold, "out2_network.stl", NNet2);
 
 	return 0;
 }
