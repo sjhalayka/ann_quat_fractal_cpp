@@ -327,11 +327,8 @@ int main(void)
 	FFBPNeuralNet NNet2("network.bin");
 
 
-	// 3) Generate isosurface
+	// 3) Generate isosurfaces
 	//
-	float threshold_max = threshold;
-	float threshold_min = 0;
-
 	generate_stl_file(false, threshold * 0.25 - 0.1, 0, threshold, "out0.stl", NNet2);
 	generate_stl_file(false, threshold * 0.5 - 0.1, threshold * 0.25, threshold, "out1.stl", NNet2);
 	generate_stl_file(false, threshold, threshold * 0.5, threshold, "out2.stl", NNet2);
